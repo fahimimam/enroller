@@ -1,0 +1,36 @@
+version: '3.3'
+
+services:
+  mongo:
+    image: mongo:3.6
+    restart: always
+    ports:
+      - 27017:27017
+    volumes:
+      - ./storage/postgres:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: secret
+
+#  redis:
+#    image: redis:5-alpine
+#    restart: always
+#    ports:
+#      - 6379:6379
+#    volumes:
+#      - ./storage/redis:/data
+#    command: 'redis-server --appendonly yes'
+
+#  app:
+#    build: .
+#    image: auth:latest
+#    depends_on:
+#      - postgres
+##      - redis
+#    volumes:
+#      - ./app.config.yaml:/etc/auth/app.config.yaml
+#    ports:
+#      - 8080:8080
+#      - 3550:3550
+#    command: 'serve --config /etc/auth/app.config.yaml'
+

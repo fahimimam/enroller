@@ -1,0 +1,61 @@
+app:
+  port: 8080
+  graceful_timeout: 1
+  env: "test"
+postgres:
+  driver: postgres
+  name: name
+  user: user
+  password: password
+  host: localhost
+  port: 5432
+  ssl_mode: disable
+  time_zone: UTC
+table:
+  user: user_infos
+  organization: organizations
+  user_organization_map: user_org_maps
+  profile: profiles
+  verification: verifications
+  otp: otps
+
+redis:
+  url: redis:6379
+  time_out: 30
+
+token:
+  access_token_duration: 30
+  refresh_token_duration: 40
+  private_key_path: keys/jwtRS256.key
+  public_key_path: keys/jwtRS256.key.pub
+
+oauth:
+  google_issuer: "https://accounts.google.com"
+  client_id: "----------------------"
+  client_secret: "------------------"
+  redirect_url: "http://localhost:8080/auth/api/v1/auth/sso/callback"
+
+
+sentry:
+  dsn: <sentry-here>
+
+migration:
+  org:
+    - name: master
+      users:
+        - first_name: Sayf Uddin Al Azad
+          last_name: Sagor
+          email: sayf.uddin@pathao.com
+          phone: 01763868877
+          password: 12345678
+          roles:
+            - master
+            - super_user
+        - first_name: Fahim
+          last_name: Imam
+          email: kazi.fahim@pathao.com
+          phone: 01234567890
+          password: 12345678
+          roles:
+            - master
+            - super_user
