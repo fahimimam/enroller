@@ -22,7 +22,7 @@ import (
 // UserService interface
 type UserService interface {
 	SignUpUser(ctx context.Context, user *model.SignupPayload) (*model.Token, error)
-	SignUpAndRegisterUser(ctx context.Context, user *model.SignupPayload) (*model.Token, error)
+	SignUpAndEnrollUser(ctx context.Context, user *model.SignupPayload) (string, error)
 	SSOLogin(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	Login(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	TokenRefresh(ctx context.Context, user *model.TokenRequestBody) (*model.Token, error)
@@ -104,44 +104,6 @@ func (u *User) SignUpUser(ctx context.Context, userReq *model.SignupPayload) (*m
 	}); err != nil {
 		return nil, err
 	}
-
-	return u.GenerateToken(&model.TokenPayload{
-		Id:    strconv.Itoa(int(user.ID)),
-		Email: user.Email,
-		Roles: user.Roles,
-		Phone: user.Phone,
-	})
-}
-func (u *User) SignUpAndRegisterUser(ctx context.Context, userReq *model.SignupPayload) (*model.Token, error) {
-	tid := utils.GetTracingID(ctx)
-	u.log.Println("SignUpUser", tid, "Request for signup from service")
-
-	// user must be created in this block
-	// 1.if user already exists in DB, then generate tokens
-	// 2. otherwise, create user and generate tokens
-	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, userReq.Phone, userReq.Email)
-	if err != nil && !errors.Is(err, infra.ErrNotFound) {
-		return nil, err
-	}
-	if user != nil {
-		return nil, errors.New("user already exists")
-	}
-	userReq.Password, err = u.GeneratePasswordHash(userReq.Password)
-	if err != nil {
-		return nil, err
-	}
-
-	if user, err = u.userRepo.CreateUser(ctx, &model.UserInfo{
-		Username: userReq.Username,
-		Phone:    userReq.Phone,
-		Email:    userReq.Email,
-		Password: userReq.Password,
-		OrgId:    userReq.OrgId,
-		Roles:    userReq.Roles,
-	}); err != nil {
-		return nil, err
-	}
-
 	err = u.RegisterUser(ctx, user)
 	if err != nil {
 		return nil, err
@@ -153,6 +115,51 @@ func (u *User) SignUpAndRegisterUser(ctx context.Context, userReq *model.SignupP
 		Roles: user.Roles,
 		Phone: user.Phone,
 	})
+}
+func (u *User) SignUpAndEnrollUser(ctx context.Context, userReq *model.SignupPayload) (string, error) {
+	tid := utils.GetTracingID(ctx)
+	u.log.Println("SignUpUser", tid, "Request for signup from service")
+
+	// user must be created in this block
+	// 1.if user already exists in DB, then generate tokens
+	// 2. otherwise, create user and generate tokens
+	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, userReq.Phone, userReq.Email)
+	if err != nil && !errors.Is(err, infra.ErrNotFound) {
+		return "", err
+	}
+	if user != nil {
+		return "", errors.New("user already exists")
+	}
+	userReq.Password, err = u.GeneratePasswordHash(userReq.Password)
+	if err != nil {
+		return "", err
+	}
+
+	if user, err = u.userRepo.CreateUser(ctx, &model.UserInfo{
+		Username: userReq.Username,
+		Phone:    userReq.Phone,
+		Email:    userReq.Email,
+		Password: userReq.Password,
+		OrgId:    userReq.OrgId,
+		Roles:    userReq.Roles,
+	}); err != nil {
+		return "", err
+	}
+
+	err = u.RegisterUser(ctx, user)
+	if err != nil {
+		return "", err
+	}
+
+	tempDir, err := os.MkdirTemp("", "msp-")
+	if err != nil {
+		return "", err
+	}
+	tempDir, err = EnrollUser(u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain, u.enrollerCfg.TLSCertPath, tempDir, user)
+	if err != nil {
+		return "", err
+	}
+	return tempDir, err
 }
 
 func (u *User) SSOLogin(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error) {
@@ -266,47 +273,14 @@ func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) (string
 		return "", err
 	}
 
-	caAddress := fmt.Sprintf("%s-%s-ca-ca.%s", u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain)
-	enrollURL := fmt.Sprintf("https://%s:%s@%s", userInfo.Username, userInfo.Password, caAddress)
-
-	cmd := exec.Command("fabric-ca-client", "enroll",
-		"--url", enrollURL,
-		"--tls.certfiles", u.enrollerCfg.TLSCertPath,
-		"--mspdir", tempDir,
-	)
-
-	if output, err := cmd.CombinedOutput(); err != nil {
-		removeErr := os.RemoveAll(tempDir)
-		if removeErr != nil {
-			return "", fmt.Errorf("failed to remove temp dir: %v\nOutput: %s", removeErr, string(output))
-		}
-		return "", fmt.Errorf("enrollment failed: %v\nOutput: %s", err, string(output))
-	}
-
-	return tempDir, nil
+	return EnrollUser(u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain, u.enrollerCfg.TLSCertPath, tempDir, userInfo)
 }
 func (u *User) RegisterUser(ctx context.Context, userInfo *model.UserInfo) error {
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("EnrollUser", tid, "Request for Enroll User from service")
 
-	caAddress := fmt.Sprintf("%s-%s-ca-ca.%s", u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain)
+	return RegisterUser(u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain, u.enrollerCfg.TLSCertPath, u.enrollerCfg.RCAMSPPath, userInfo)
 
-	cmd := exec.Command("fabric-ca-client", "register",
-		"--id.name", userInfo.Username,
-		"--id.secret", userInfo.Password,
-		"--id.type", "client",
-		"--id.affiliation", u.enrollerCfg.Org,
-		"--id.attrs", fmt.Sprintf("identity.id=%s:ecert", userInfo.ID),
-		"--url", fmt.Sprintf("https://%s", caAddress),
-		"--tls.certfiles", u.enrollerCfg.TLSCertPath,
-		"--mspdir", u.enrollerCfg.RCAMSPPath,
-	)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("registration failed: %v\nOutput: %s", err, string(output))
-	}
-	return nil
 }
 
 func (u *User) RevokeUser(ctx context.Context, username, reason string) error {

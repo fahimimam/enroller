@@ -143,7 +143,7 @@ func (uc *UsersController) RegisterUser(w http.ResponseWriter, r *http.Request) 
 		uc.lgr.Println("Register", tid, "complete!")
 	}
 }
-func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.Request) {
+func (uc *UsersController) RegisterAndEnrollUser(w http.ResponseWriter, r *http.Request) {
 	ctx := context.Background()
 	tid := utils.GetTracingID(ctx)
 	uc.lgr.Println("SignUpUser", tid, "initialize")
@@ -179,7 +179,7 @@ func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	tokensResponse, err := uc.userSvc.SignUpAndRegisterUser(ctx, &model.SignupPayload{
+	tempDir, err := uc.userSvc.SignUpAndEnrollUser(ctx, &model.SignupPayload{
 		Username: body.Username,
 		Phone:    body.Phone,
 		Email:    body.Email,
@@ -192,12 +192,15 @@ func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if err := uc.vaultSvc.StoreUserMSP(ctx, body.Username, tempDir); err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
 	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, map[string]string{
-		"access_token":  tokensResponse.AccessToken,
-		"refresh_token": tokensResponse.RefreshToken,
-		"username":      body.Username,
-		"password":      body.Password, // TODO: Should I send back the password?!
-		"token_type":    "Bearer",
+		"username":   body.Username,
+		"password":   body.Password, // TODO: Should I send back the password?!
+		"token_type": "Bearer",
 	})
 	if err == nil {
 		uc.lgr.Println("SignUpUser", tid, "complete!")

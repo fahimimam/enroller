@@ -62,7 +62,7 @@ func (v *Vault) StoreDirectory(username, dirPath string) error {
 }
 
 func (v *Vault) GetDirectoryContent(username, dirPath string, mspData map[string][]byte) error {
-	// List directory contents using metadata path
+	// List directory contents using a metadata path
 	listPath := fmt.Sprintf("%s/metadata/users/%s/%s", v.vaultConfig.KvPath, username, dirPath)
 	fmt.Println(listPath)
 	secret, err := v.vault.LogicalList(listPath)
