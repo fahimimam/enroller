@@ -48,11 +48,14 @@ func (v *Vault) StoreDirectory(username, dirPath string) error {
 
 		fmt.Println(vaultPath)
 
-		err = v.vault.LogicalWrite(vaultPath, map[string]interface{}{
+		_, err = v.vault.LogicalWrite(vaultPath, map[string]interface{}{
 			"data": map[string]interface{}{
 				"content": base64.StdEncoding.EncodeToString(content),
 			},
 		})
+		if err != nil {
+			return fmt.Errorf("failed to store %s: %v", path, err)
+		}
 
 		return err
 	})
@@ -115,14 +118,14 @@ func (v *Vault) GetVaultContent(username, path string) ([]byte, error) {
 }
 
 func (v *Vault) WriteContent(path string, data map[string]interface{}) error {
-	if err := v.vault.LogicalWrite(path, data); err != nil {
+	if _, err := v.vault.LogicalWrite(path, data); err != nil {
 		return fmt.Errorf("failed to store revocation key: %v", err)
 	}
 	return nil
 }
 
 func (v *Vault) DeleteContent(path string) error {
-	if err := v.vault.LogicalDelete(path); err != nil {
+	if _, err := v.vault.LogicalDelete(path); err != nil {
 		return fmt.Errorf("failed to store revocation key: %v", err)
 	}
 	return nil

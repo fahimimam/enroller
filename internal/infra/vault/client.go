@@ -1,14 +1,12 @@
 package vault
 
 import (
-	"fmt"
 	"github.com/hashicorp/vault/api"
 	"github.com/triapex/auth/config"
 )
 
 type Vault struct {
 	client *api.Client
-	kvPath string
 }
 
 func NewVault(cfg *config.Vault) (*Vault, error) {
@@ -22,23 +20,14 @@ func NewVault(cfg *config.Vault) (*Vault, error) {
 
 	return &Vault{
 		client: client,
-		kvPath: cfg.KvPath,
 	}, nil
 }
-func (v *Vault) LogicalWrite(path string, data map[string]interface{}) error {
-	if _, err := v.client.Logical().Write(path, data); err != nil {
-		return fmt.Errorf("failed to write to vault: %v", err)
-	}
-	return nil
+func (v *Vault) LogicalWrite(path string, data map[string]interface{}) (*api.Secret, error) {
+	return v.client.Logical().Write(path, data)
 }
 
-func (v *Vault) LogicalDelete(path string) error {
-	_, err := v.client.Logical().Delete(path)
-	if err != nil {
-		return fmt.Errorf("vault deletion failed: %v", err)
-	}
-
-	return nil
+func (v *Vault) LogicalDelete(path string) (*api.Secret, error) {
+	return v.client.Logical().Delete(path)
 }
 
 func (v *Vault) LogicalList(path string) (*api.Secret, error) {
