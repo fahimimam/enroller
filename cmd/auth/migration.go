@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/triapex/auth/config"
+	"github.com/triapex/auth/internal/infra"
 	"github.com/triapex/auth/internal/infra/postgres"
 	"github.com/triapex/auth/internal/infra/redis"
+	"github.com/triapex/auth/internal/infra/vault"
 	"github.com/triapex/auth/internal/repo"
 	"github.com/triapex/auth/internal/service"
 	"github.com/triapex/auth/logger"
@@ -27,9 +29,10 @@ var migrationRoot = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cfgPostgres := config.GetPostgres(cfgPath)
 		cfgDBTable := config.GetTable(cfgPath)
-		cfgRedis := config.GetRedis(cfgPath)
 		cfgToken := config.GetToken(cfgPath)
 		cfgOAuth := config.GetOAuth(cfgPath)
+		cfgVault := config.GetVault(cfgPath)
+		cfgEnroller := config.GetEnroller(cfgPath)
 		migrationConfig = config.GetMigration(cfgPath)
 		ctx := context.Background()
 		lgr := logger.DefaultOutStructLogger
@@ -39,16 +42,12 @@ var migrationRoot = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		vault, err := infra.NewVaultStore(cfgVault)
 		//defer db.Close(ctx)
 		// connect redis db
 
-		kv, err := redis.New(cfgRedis.URL, cfgRedis.RedisTimeOut, "auth")
-		if err != nil {
-			return err
-		}
-		defer kv.Close()
-
-		userRepo := repo.NewUser(cfgDBTable, db)
+		userRepo := repo.NewUser(cfgDBTable, cfgVault, db, vault)
 		privateKey, err := config.GetPrivateKey(cfgToken.PrivateKeyPath)
 		if err != nil {
 			return err
@@ -67,7 +66,7 @@ var migrationRoot = &cobra.Command{
 		if err != nil || refreshTokenDuration == 0 {
 			refreshTokenDuration = DefaultRefreshTokenDuration
 		}
-		userSVC = service.NewUser(userRepo, privateKey, publicKey, time.Duration(accessTokenDuration), time.Duration(refreshTokenDuration), lgr, cfgOAuth)
+		userSVC = service.NewUser(userRepo, privateKey, publicKey, time.Duration(accessTokenDuration), time.Duration(refreshTokenDuration), lgr, cfgOAuth, cfgEnroller)
 		return nil
 	},
 }
