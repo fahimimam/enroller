@@ -105,12 +105,3 @@ func ToMap(data interface{}) (map[string]interface{}, error) {
 
 	return out, nil
 }
-
-func IsOrgIDPresent(orgIDs []uint, orgID uint) bool {
-	for _, oID := range orgIDs {
-		if oID == orgID {
-			return true
-		}
-	}
-	return false
-}
