@@ -13,11 +13,6 @@ postgres:
   time_zone: UTC
 table:
   user: user_infos
-  organization: organizations
-  user_organization_map: user_org_maps
-  profile: profiles
-  verification: verifications
-  otp: otps
 
 redis:
   url: redis:6379
