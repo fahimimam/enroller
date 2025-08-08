@@ -22,8 +22,6 @@ type UserRepo interface {
 	VerifyOtp(ctx context.Context, id string) (*model.VerificationInfo, error)
 	ResetPassword(ctx context.Context, password string, id string) error
 	SendOtp(ctx context.Context, verification *model.VerificationInfo) error
-	UpdateUserVerificationStatus(ctx context.Context, id string, verified bool) error
-	UpdateUserType(ctx context.Context, id uint, userType string) error
 	StoreUserMSP(ctx context.Context, userName, mspPath string) error
 	RemoveUserMSP(ctx context.Context, userName string) error
 }
@@ -152,26 +150,6 @@ func (p *User) VerifyOtp(ctx context.Context, id string) (*model.VerificationInf
 		return nil, err
 	}
 	return verification, nil
-}
-
-func (p *User) UpdateUserVerificationStatus(ctx context.Context, id string, verified bool) error {
-	filter := bson.D{{"_id", id}}
-	update := bson.D{{"$set",
-		bson.D{
-			{"verified", verified},
-		},
-	}}
-	return p.db.UpdateOne(ctx, p.table.UserTable, filter, update)
-}
-
-func (p *User) UpdateUserType(ctx context.Context, id uint, userType string) error {
-	filter := bson.D{{"_id", id}}
-	update := bson.D{{"$set",
-		bson.D{
-			{"type", userType},
-		},
-	}}
-	return p.db.UpdateOne(ctx, p.table.UserTable, filter, update)
 }
 
 func (p *User) StoreUserMSP(ctx context.Context, username, mspPath string) error {

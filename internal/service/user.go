@@ -26,11 +26,6 @@ type UserService interface {
 	TokenRefresh(ctx context.Context, user *model.TokenRequestBody) (*model.Token, error)
 	GetUserByEmailORPhone(ctx context.Context, phone string, email string) (*model.UserInfo, error)
 	GetUserByID(ctx context.Context, id string) (*model.UserInfo, error)
-	SendResetPasswordCode(ctx context.Context, userInfo *model.UserInfo) (*model.VerificationSuccessResponse, error)
-	VerifyResetPasswordCode(ctx context.Context, pinVerifyRequestBody *model.CodeVerifyReq) error
-	VerifyOtp(ctx context.Context, pinVerifyRequestBody *model.CodeVerifyReq) error
-	ResetPassword(ctx context.Context, password string, id string) error
-	SendOtp(ctx context.Context, userInfo *model.UserInfo) (*model.VerificationSuccessResponse, error)
 	EnrollUser(ctx context.Context, userInfo *model.UserInfo) error
 	RevokeUser(ctx context.Context, userInfo *model.UserInfo, reason string) error
 }
@@ -100,10 +95,6 @@ func (u *User) SignUpUser(ctx context.Context, userReq *model.SignupPayload) (*m
 			return nil, err
 		}
 
-	}
-
-	if userReq.UserInfo.Type != user.Type {
-		err = u.userRepo.UpdateUserType(ctx, userReq.UserInfo.ID, string(userReq.UserInfo.Type))
 	}
 
 	userProfile := &model.Profile{
@@ -254,60 +245,6 @@ func (u *User) GetUserByID(ctx context.Context, id string) (*model.UserInfo, err
 	return u.userRepo.GetUserById(ctx, id)
 }
 
-func (u *User) SendResetPasswordCode(ctx context.Context, userInfo *model.UserInfo) (*model.VerificationSuccessResponse, error) {
-	/*
-		tid := utils.GetTracingID(ctx)
-			u.log.Println("SendResetPasswordCode", tid, "Request for send verificationInfo code to mail from service")
-			code := utils.GenerateCode(1000, 9999)
-			smsRequest := &model.SMSRequest{
-				User:   userInfo.Phone,
-				Data:   strconv.Itoa(code),
-				IsBulk: false,
-			}
-
-			if viper.GetString("app.env") == utils.AppEnvTest {
-				code = 1234
-			} else {
-				err := sendMessageToNotification(smsRequest)
-				if err != nil {
-					return nil, err
-				}
-			}
-			verification := &model.VerificationInfo{
-				ID:          userInfo.ID,
-				Phone:       userInfo.Phone,
-				Code:        strconv.Itoa(code),
-				ExpiredTime: time.Now().UTC().Add(time.Minute * 5),
-			}
-			err := u.userRepo.SendResetPasswordCode(ctx, verification)
-			if err != nil {
-				return nil, err
-			}
-			verificationSuccess := &model.VerificationSuccessResponse{
-				ID:    userInfo.ID,
-				Phone: userInfo.Phone,
-			}
-			return verificationSuccess, nil
-	*/
-	return nil, nil
-}
-
-func (u *User) VerifyResetPasswordCode(ctx context.Context, pinVerifyRequestBody *model.CodeVerifyReq) error {
-	tid := utils.GetTracingID(ctx)
-	u.log.Println("VerifyResetPasswordCode", tid, "Request for verify pin code from service")
-	verification, err := u.userRepo.VerifyResetPasswordCode(ctx, pinVerifyRequestBody.ID)
-	if err != nil {
-		return err
-	}
-	if pinVerifyRequestBody.Code != verification.Code {
-		return errors.New("code verification failed")
-	}
-	if time.Now().UTC().After(verification.ExpiredTime) {
-		return errors.New("code Expired")
-	}
-	return nil
-}
-
 func (u *User) ResetPassword(ctx context.Context, password string, id string) error {
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("ChangePassword", tid, "Request for reset Password from service")
@@ -320,62 +257,6 @@ func (u *User) ResetPassword(ctx context.Context, password string, id string) er
 		return err
 	}
 	return nil
-}
-
-func (u *User) SendOtp(ctx context.Context, userInfo *model.UserInfo) (*model.VerificationSuccessResponse, error) {
-	/*
-		tid := utils.GetTracingID(ctx)
-
-			u.log.Println("SendOtp", tid, "Send Otp request for login  from service")
-			code := strconv.Itoa(utils.GenerateCode(10000, 99999))
-			smsRequest := &model.SMSRequest{
-				User:   userInfo.Phone,
-				Data:   code,
-				IsBulk: false,
-			}
-
-			if viper.GetString("app.env") == utils.AppEnvTest {
-				code = strconv.Itoa(12345)
-			} else {
-				err := sendMessageToNotification(smsRequest)
-				if err != nil {
-					return nil, err
-				}
-			}
-			verification := &model.VerificationInfo{
-				ID:          userInfo.ID,
-				Phone:       userInfo.Phone,
-				Code:        code,
-				ExpiredTime: time.Now().UTC().Add(time.Minute * 5),
-			}
-			err := u.userRepo.SendOtp(ctx, verification)
-			if err != nil {
-				return nil, err
-			}
-			verificationSuccess := &model.VerificationSuccessResponse{
-				ID:    userInfo.ID,
-				Phone: userInfo.Phone,
-			}
-			return verificationSuccess, nil
-	*/
-
-	return nil, nil
-}
-
-func (u *User) VerifyOtp(ctx context.Context, pinVerifyRequestBody *model.CodeVerifyReq) error {
-	tid := utils.GetTracingID(ctx)
-	u.log.Println("VerifyOtp", tid, "Request for verify otp from service")
-	verification, err := u.userRepo.VerifyOtp(ctx, pinVerifyRequestBody.ID)
-	if err != nil {
-		return err
-	}
-	if pinVerifyRequestBody.Code != verification.Code {
-		return errors.New("otp verification failed")
-	}
-	if time.Now().UTC().After(verification.ExpiredTime) {
-		return errors.New("otp Expired")
-	}
-	return u.userRepo.UpdateUserVerificationStatus(ctx, pinVerifyRequestBody.ID, true)
 }
 
 func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) error {
