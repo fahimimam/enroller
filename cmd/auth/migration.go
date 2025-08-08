@@ -64,7 +64,7 @@ var migrationRoot = &cobra.Command{
 		if err != nil || refreshTokenDuration == 0 {
 			refreshTokenDuration = DefaultRefreshTokenDuration
 		}
-		userSVC = service.NewUser(userRepo, privateKey, publicKey, time.Duration(accessTokenDuration), time.Duration(refreshTokenDuration), lgr, cfgOAuth, cfgEnroller)
+		userSVC = service.NewUser(userRepo, privateKey, publicKey, time.Duration(accessTokenDuration), time.Duration(refreshTokenDuration), lgr, cfgEnroller, cfgOAuth)
 		return nil
 	},
 }
