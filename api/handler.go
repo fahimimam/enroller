@@ -16,10 +16,11 @@ func usersRouter(ctrl *UsersController) http.Handler {
 		r.Use(middleware.AuthMiddleware(ctrl.RSAPublicKey))
 		r.Use(middleware.RoleAuthorizationMiddleware(allowedRolesForAuth))
 		r.Post("/register", ctrl.SignUpUser)
-		r.Post("/signup-register", ctrl.SignUpUser)
+		r.Post("/signup-register", ctrl.SignUpAndRegisterUser)
 		r.Post("/register", ctrl.RegisterUser)
 		r.Post("/enroll", ctrl.Enroll)
-		r.Delete("/revoke", ctrl.Revoke)
+		r.Delete("/revoke/{username}", ctrl.Revoke)
+		r.Get("/msp/{username}", ctrl.GetMsp)
 	})
 
 	h.Group(func(r chi.Router) {

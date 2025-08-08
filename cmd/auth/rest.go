@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"crypto/rsa"
+	"github.com/triapex/auth/internal/infra/vault"
 	"log"
 	"net/http"
 	"os"
@@ -27,9 +28,10 @@ const DefaultRefreshTokenDuration = 30
 
 // srvCmd is the serve sub command to start the api server
 var srvCmd = &cobra.Command{
-	Use:   "serve",
-	Short: "serve serves the auth server",
-	RunE:  serve,
+	Use:     "serve",
+	Short:   "serve serves the auth server",
+	Aliases: []string{"s"},
+	RunE:    serve,
 }
 
 func init() {
@@ -55,10 +57,11 @@ func serve(cmd *cobra.Command, args []string) error {
 	}
 	defer db.Close(ctx)
 
-	vault, err := infra.NewVaultStore(cfgVault)
+	vaultInfra, _ := vault.NewVault(cfgVault)
 
+	vaultRepo := repo.NewVault(cfgVault, vaultInfra)
 	// Initialize Repositories.
-	userRepo := repo.NewUser(cfgDBTable, cfgVault, db, vault)
+	userRepo := repo.NewUser(cfgDBTable, cfgVault, db)
 
 	// Generate Public and private keys for User services.
 	privateKey, err := config.GetPrivateKey(cfgToken.PrivateKeyPath)
@@ -81,6 +84,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	}
 
 	userSvc := service.NewUser(userRepo, privateKey, publicKey, time.Duration(accessTokenDuration), time.Duration(refreshTokenDuration), lgr, cfgEnroller, cfgOauth)
+	vaultSvc := service.NewVault(vaultRepo, lgr, cfgEnroller, cfgVault)
 	api.SetLogger(logger.DefaultOutLogger)
 
 	errChan := make(chan error)
@@ -91,7 +95,7 @@ func serve(cmd *cobra.Command, args []string) error {
 	}()
 
 	go func() {
-		if err := startApiServer(cfgApp, userSvc, cfgOauth, publicKey, privateKey, cfgEnroller, lgr); err != nil {
+		if err := startApiServer(cfgApp, userSvc, vaultSvc, cfgOauth, publicKey, privateKey, cfgEnroller, lgr); err != nil {
 			errChan <- err
 		}
 	}()
@@ -140,9 +144,9 @@ func startHealthServer(cfg *config.Application, db infra.DB) error {
 	return <-errCh
 }
 
-func startApiServer(cfg *config.Application, userSvc service.UserService, oauthCfg *config.OAuth2, publicKey *rsa.PublicKey, privateKey *rsa.PrivateKey, enrollerConfig *config.Enroller, lgr logger.StructLogger) error {
+func startApiServer(cfg *config.Application, userSvc service.UserService, vaultSvc service.VaultService, oauthCfg *config.OAuth2, publicKey *rsa.PublicKey, privateKey *rsa.PrivateKey, enrollerConfig *config.Enroller, lgr logger.StructLogger) error {
 
-	usersCtrl := api.NewUsersController(userSvc, oauthCfg, enrollerConfig, publicKey, privateKey, lgr)
+	usersCtrl := api.NewUsersController(userSvc, vaultSvc, oauthCfg, enrollerConfig, publicKey, privateKey, lgr)
 	usersCtrl.SetLogger(lgr)
 
 	r := chi.NewMux()

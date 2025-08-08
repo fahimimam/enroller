@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"github.com/triapex/auth/api/response"
 	"github.com/triapex/auth/config"
 	"github.com/triapex/auth/internal/service"
@@ -17,7 +18,8 @@ import (
 
 // UsersController ...
 type UsersController struct {
-	svc           service.UserService
+	userSvc       service.UserService
+	vaultSvc      service.VaultService
 	OAuthCfg      *config.OAuth2
 	EnrollerCfg   *config.Enroller
 	RSAPrivateKey *rsa.PrivateKey
@@ -26,9 +28,10 @@ type UsersController struct {
 }
 
 // NewUsersController ...
-func NewUsersController(svc service.UserService, oauthCFG *config.OAuth2, enrollerCFG *config.Enroller, rsaPubKey *rsa.PublicKey, rsaPrivateKey *rsa.PrivateKey, lgr logger.StructLogger) *UsersController {
+func NewUsersController(userSvc service.UserService, vaultSvc service.VaultService, oauthCFG *config.OAuth2, enrollerCFG *config.Enroller, rsaPubKey *rsa.PublicKey, rsaPrivateKey *rsa.PrivateKey, lgr logger.StructLogger) *UsersController {
 	return &UsersController{
-		svc:           svc,
+		userSvc:       userSvc,
+		vaultSvc:      vaultSvc,
 		OAuthCfg:      oauthCFG,
 		lgr:           lgr,
 		RSAPublicKey:  rsaPubKey,
@@ -88,7 +91,7 @@ func (uc *UsersController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokensResponse, err := uc.svc.SignUpUser(ctx, &model.SignupPayload{
+	tokensResponse, err := uc.userSvc.SignUpUser(ctx, &model.SignupPayload{
 		Username: body.Username,
 		Phone:    body.Phone,
 		Email:    body.Email,
@@ -101,7 +104,13 @@ func (uc *UsersController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, tokensResponse)
+	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, map[string]string{
+		"access_token":  tokensResponse.AccessToken,
+		"refresh_token": tokensResponse.RefreshToken,
+		"username":      body.Username,
+		"password":      body.Password, // TODO: Should I send back the password?!
+		"token_type":    "Bearer",
+	})
 	if err == nil {
 		uc.lgr.Println("SignUpUser", tid, "complete!")
 	}
@@ -117,13 +126,13 @@ func (uc *UsersController) RegisterUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, _ := uc.svc.GetUserByID(ctx, userID)
+	user, _ := uc.userSvc.GetUserByID(ctx, userID)
 	if user == nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, "User not found", nil)
 		return
 	}
 
-	err := uc.svc.RegisterUser(ctx, user)
+	err := uc.userSvc.RegisterUser(ctx, user)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
@@ -170,7 +179,7 @@ func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	tokensResponse, err := uc.svc.SignUpAndRegisterUser(ctx, &model.SignupPayload{
+	tokensResponse, err := uc.userSvc.SignUpAndRegisterUser(ctx, &model.SignupPayload{
 		Username: body.Username,
 		Phone:    body.Phone,
 		Email:    body.Email,
@@ -183,7 +192,13 @@ func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.
 		return
 	}
 
-	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, tokensResponse)
+	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, map[string]string{
+		"access_token":  tokensResponse.AccessToken,
+		"refresh_token": tokensResponse.RefreshToken,
+		"username":      body.Username,
+		"password":      body.Password, // TODO: Should I send back the password?!
+		"token_type":    "Bearer",
+	})
 	if err == nil {
 		uc.lgr.Println("SignUpUser", tid, "complete!")
 	}
@@ -212,7 +227,7 @@ func (uc *UsersController) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokensResponse, err := uc.svc.Login(r.Context(), loginRequestBody)
+	tokensResponse, err := uc.userSvc.Login(r.Context(), loginRequestBody)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
@@ -233,7 +248,7 @@ func (uc *UsersController) ssoLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (uc *UsersController) callback(w http.ResponseWriter, r *http.Request) {
-	tokensResponse, err := uc.svc.SSOLogin(r.Context(), &model.LoginRequest{
+	tokensResponse, err := uc.userSvc.SSOLogin(r.Context(), &model.LoginRequest{
 		Identifier: r.URL.Query().Get("code"),
 	})
 	if err != nil {
@@ -270,7 +285,7 @@ func (uc *UsersController) TokenRefresh(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tokensResponseBody, err := uc.svc.TokenRefresh(r.Context(), tokenRefreshRequest)
+	tokensResponseBody, err := uc.userSvc.TokenRefresh(r.Context(), tokenRefreshRequest)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
@@ -288,14 +303,19 @@ func (uc *UsersController) Enroll(w http.ResponseWriter, r *http.Request) {
 	uc.lgr.Println("Enroll", tid, "Initialize")
 	userID := r.Header.Get("UserID")
 
-	user, err := uc.svc.GetUserByID(r.Context(), userID)
+	user, err := uc.userSvc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
-	err = uc.svc.EnrollUser(r.Context(), user)
+	tempDir, err := uc.userSvc.EnrollUser(r.Context(), user)
 	if err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	if err := uc.vaultSvc.StoreUserMSP(ctx, user.Username, tempDir); err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
@@ -315,12 +335,19 @@ func (uc *UsersController) Revoke(w http.ResponseWriter, r *http.Request) {
 	tid := utils.GetTracingID(ctx)
 	uc.lgr.Println("Enroll", tid, "Initialize")
 	userID := r.Header.Get("UserID")
-
-	user, err := uc.svc.GetUserByID(r.Context(), userID)
+	usernameToRemove := chi.URLParam(r, "username")
+	user, err := uc.userSvc.GetUserByID(r.Context(), userID)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
+
+	if user == nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User not found", nil)
+		return
+	}
+
+	//TODO: Add ROLE validation if needed
 
 	// decode request body to UserInfo
 	body := &revokeUserPld{}
@@ -329,13 +356,56 @@ func (uc *UsersController) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = uc.svc.RevokeUser(r.Context(), user, body.Reason)
+	err = uc.userSvc.RevokeUser(r.Context(), usernameToRemove, body.Reason)
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
 		return
 	}
 
+	if err := uc.vaultSvc.RemoveUserMSP(ctx, usernameToRemove); err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
 	err = response.ServeJSON(w, http.StatusOK, "User Enrolled Successfully", nil)
+	if err == nil {
+		uc.lgr.Println("VerifyResetPasswordCode", tid, "complete!")
+	}
+}
+
+func (uc *UsersController) GetMsp(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	tid := utils.GetTracingID(ctx)
+	uc.lgr.Println("Enroll", tid, "Initialize")
+	userID := r.Header.Get("UserID")
+	username := chi.URLParam(r, "username")
+	user, err := uc.userSvc.GetUserByID(r.Context(), userID)
+	if err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	if user == nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User not found", nil)
+		return
+	}
+
+	//TODO: Add ROLE validation if needed
+
+	// decode request body to UserInfo
+	body := &revokeUserPld{}
+	if err := json.NewDecoder(r.Body).Decode(body); err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	mspResp, err := uc.vaultSvc.GetUserMsp(ctx, username)
+	if err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	err = response.ServeJSON(w, http.StatusOK, "User Enrolled Successfully", mspResp)
 	if err == nil {
 		uc.lgr.Println("VerifyResetPasswordCode", tid, "complete!")
 	}

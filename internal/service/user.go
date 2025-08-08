@@ -28,9 +28,9 @@ type UserService interface {
 	TokenRefresh(ctx context.Context, user *model.TokenRequestBody) (*model.Token, error)
 	GetUserByEmailORPhone(ctx context.Context, phone string, email string) (*model.UserInfo, error)
 	GetUserByID(ctx context.Context, id string) (*model.UserInfo, error)
-	EnrollUser(ctx context.Context, userInfo *model.UserInfo) error
+	EnrollUser(ctx context.Context, userInfo *model.UserInfo) (string, error)
 	RegisterUser(ctx context.Context, userInfo *model.UserInfo) error
-	RevokeUser(ctx context.Context, userInfo *model.UserInfo, reason string) error
+	RevokeUser(ctx context.Context, username, reason string) error
 }
 
 //Login(ctx context.Context, user *model.LoginRequest) (*model.Token, error)
@@ -38,6 +38,7 @@ type UserService interface {
 // User ...
 type User struct {
 	userRepo    repo.UserRepo
+	vaultRepo   repo.VaultRepo
 	log         logger.StructLogger
 	oAuth       *config.OAuth2
 	enrollerCfg *config.Enroller
@@ -257,26 +258,12 @@ func (u *User) GetUserByID(ctx context.Context, id string) (*model.UserInfo, err
 	return u.userRepo.GetUserById(ctx, id)
 }
 
-func (u *User) ResetPassword(ctx context.Context, password string, id string) error {
-	tid := utils.GetTracingID(ctx)
-	u.log.Println("ChangePassword", tid, "Request for reset Password from service")
-	hashPass, err := u.GeneratePasswordHash(password)
-	if err != nil {
-		return err
-	}
-	err = u.userRepo.ResetPassword(ctx, hashPass, id)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) error {
+func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) (string, error) {
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("EnrollUser", tid, "Request for Enroll User from service")
 	tempDir, err := os.MkdirTemp("", "msp-")
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	caAddress := fmt.Sprintf("%s-%s-ca-ca.%s", u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain)
@@ -291,16 +278,12 @@ func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) error {
 	if output, err := cmd.CombinedOutput(); err != nil {
 		removeErr := os.RemoveAll(tempDir)
 		if removeErr != nil {
-			return fmt.Errorf("failed to remove temp dir: %v\nOutput: %s", removeErr, string(output))
+			return "", fmt.Errorf("failed to remove temp dir: %v\nOutput: %s", removeErr, string(output))
 		}
-		return fmt.Errorf("enrollment failed: %v\nOutput: %s", err, string(output))
+		return "", fmt.Errorf("enrollment failed: %v\nOutput: %s", err, string(output))
 	}
 
-	if err := u.userRepo.StoreUserMSP(ctx, userInfo.Username, tempDir); err != nil {
-		return errors.New("failed to store user msp")
-	}
-
-	return nil
+	return tempDir, nil
 }
 func (u *User) RegisterUser(ctx context.Context, userInfo *model.UserInfo) error {
 	tid := utils.GetTracingID(ctx)
@@ -326,13 +309,13 @@ func (u *User) RegisterUser(ctx context.Context, userInfo *model.UserInfo) error
 	return nil
 }
 
-func (u *User) RevokeUser(ctx context.Context, userInfo *model.UserInfo, reason string) error {
+func (u *User) RevokeUser(ctx context.Context, username, reason string) error {
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("EnrollUser", tid, "Request for Enroll User from service")
 
 	// Revoke using RCA admin MSP
 	cmd := exec.Command("fabric-ca-client", "revoke",
-		"--revoke.name", userInfo.Username,
+		"--revoke.name", username,
 		"--revoke.reason", reason,
 		"--url", fmt.Sprintf("https://%s-%s-ca-ca.%s", u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain),
 		"--tls.certfiles", u.enrollerCfg.TLSCertPath,
@@ -341,10 +324,6 @@ func (u *User) RevokeUser(ctx context.Context, userInfo *model.UserInfo, reason 
 
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("revocation failed: %v\nOutput: %s", err, string(output))
-	}
-
-	if err := u.userRepo.RemoveUserMSP(ctx, userInfo.Username); err != nil {
-		return errors.New("failed to store user msp")
 	}
 
 	return nil

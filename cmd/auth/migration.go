@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/triapex/auth/config"
-	"github.com/triapex/auth/internal/infra"
 	"github.com/triapex/auth/internal/infra/postgres"
 	"github.com/triapex/auth/internal/repo"
 	"github.com/triapex/auth/internal/service"
@@ -41,11 +40,10 @@ var migrationRoot = &cobra.Command{
 			return err
 		}
 
-		vault, err := infra.NewVaultStore(cfgVault)
 		//defer db.Close(ctx)
 		// connect redis db
 
-		userRepo := repo.NewUser(cfgDBTable, cfgVault, db, vault)
+		userRepo := repo.NewUser(cfgDBTable, cfgVault, db)
 		privateKey, err := config.GetPrivateKey(cfgToken.PrivateKeyPath)
 		if err != nil {
 			return err
