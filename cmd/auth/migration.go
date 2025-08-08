@@ -79,11 +79,32 @@ var migrationUp = &cobra.Command{
 	Long:  `Populate tables in database`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		log.Println("Populating database...")
-		//ctx := context.Background()
-		defer db.Close(context.Background())
+		ctx := context.Background()
+		defer func(db *postgres.Postgres) {
+			closeErr := db.Close(context.Background())
+			if closeErr != nil {
+				log.Println("Failed to close database connection. Error: ", closeErr.Error())
+			}
+		}(db)
+
 		if err := db.DB.AutoMigrate(model.Models...); err != nil {
 			log.Println("Failed to migrate database. Error: ", err.Error())
 			return err
+		}
+
+		for _, userConfig := range migrationConfig.Users {
+			_, err := userSVC.SignUpUser(ctx, &model.SignupPayload{
+				Username: userConfig.Username,
+				Phone:    userConfig.Phone,
+				Email:    userConfig.Email,
+				Password: userConfig.Password,
+				OrgId:    userConfig.OrgId,
+				Roles:    userConfig.Roles,
+			})
+			if err != nil {
+				log.Println("Failed to create user. Error: ", err.Error())
+				return err
+			}
 		}
 
 		log.Println("Database populated successfully!")

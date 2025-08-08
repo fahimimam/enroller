@@ -6,13 +6,6 @@ import (
 	"regexp"
 )
 
-type UserType string
-
-const (
-	Employer UserType = "employer"
-	Employee UserType = "employee"
-)
-
 func IsValueEmpty(val string) bool {
 	if val == "" {
 		return true
@@ -43,11 +36,4 @@ func IsValidPhoneNumber(phoneNumber string) bool {
 		return false
 	}
 	return true
-}
-
-func IsUserType(userType UserType) bool {
-	if userType == Employer || userType == Employee {
-		return true
-	}
-	return false
 }

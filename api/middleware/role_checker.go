@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"github.com/triapex/auth/internal/service"
+	"github.com/triapex/auth/utils"
 	"net/http"
 )
 
@@ -22,7 +23,7 @@ func RoleAuthorizationMiddleware(allowedRoles []string) func(http.Handler) http.
 				return
 			}
 
-			r.Header.Set("User-ID", user.ID)
+			r.Header.Set(utils.UserIDHeader, user.ID)
 
 			// If the user has the required role, proceed to the next middleware or handler
 			next.ServeHTTP(w, r)

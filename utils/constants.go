@@ -5,4 +5,7 @@ const (
 	invoiceCreator = "invoice_creator"
 	invoiceReader  = "invoice_reader"
 	invoiceWriter  = "invoice_writer"
+
+	JWTTokenIssuer = "enroller"
+	UserIDHeader   = "User-ID"
 )

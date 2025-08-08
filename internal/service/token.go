@@ -6,8 +6,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/golang-jwt/jwt/v5"
 	"github.com/triapex/auth/model"
+	"github.com/triapex/auth/utils"
 	"golang.org/x/crypto/bcrypt"
 	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -15,14 +17,14 @@ type CustomClaims struct {
 	jwt.RegisteredClaims
 	Email  string   `json:"email"`
 	Roles  []string `json:"roles"`
-	OrgIDs []uint   `json:"org_id"`
-	UserID uint     `json:"user_id"`
+	OrgID  string   `json:"org_id"`
+	UserID string   `json:"user_id"`
 }
 
 func (u *User) GenerateToken(user *model.TokenPayload) (*model.Token, error) {
 	randStr := u.GenerateRandomString(32)
 
-	// generate a access token
+	// generate an access token
 	accessToken, err := u.generateToken(user, randStr)
 	if err != nil {
 		return nil, err
@@ -44,21 +46,10 @@ func (u *User) GenerateToken(user *model.TokenPayload) (*model.Token, error) {
 func (u *User) generateToken(tPayload *model.TokenPayload, randStr string) (string, error) {
 	token := jwt.New(jwt.SigningMethodRS256)
 
-	//claims := jwt.MapClaims{
-	//	"jti":      randStr,
-	//	"exp":      time.Now().Add(u.AccessTokenDuration * time.Minute).Unix(),
-	//	"iat":      time.Now().Unix(),
-	//	"aud":      tPayload.Id,
-	//	"email":    tPayload.Email,
-	//	"phone":    tPayload.Phone,
-	//	"type":     tPayload.Type,
-	//	"verified": tPayload.Verified,
-	//}
-
 	claims := CustomClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(u.AccessTokenDuration * time.Minute)),
-			Issuer:    "triapex-auth",
+			Issuer:    utils.JWTTokenIssuer,
 		},
 		Email:  tPayload.Email,
 		Roles:  tPayload.Roles,
@@ -125,8 +116,8 @@ func (u *User) ValidateAndParseToken(tokenString string) (*model.UserInfo, error
 		if err := json.Unmarshal([]byte(payload), data); err != nil {
 			return nil, err
 		}
-		userInfo.ID = data.Id
-		userInfo.Type = data.Type
+		val, _ := strconv.Atoi(data.Id)
+		userInfo.ID = uint(val)
 		userInfo.Email = data.Email
 		userInfo.Phone = data.Phone
 	}

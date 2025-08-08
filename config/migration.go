@@ -8,22 +8,17 @@ import (
 )
 
 type UserDetails struct {
-	FirstName string   `mapstructure:"first_name"`
-	LastName  string   `mapstructure:"last_name"`
-	Email     string   `mapstructure:"email"`
-	Phone     string   `mapstructure:"phone"`
-	Password  string   `mapstructure:"password"`
-	Roles     []string `mapstructure:"roles"`
-}
-
-type OrganizationDetails struct {
-	Name  string        `mapstructure:"name"`
-	Users []UserDetails `mapstructure:"users"`
+	Username string   `mapstructure:"username"`
+	Email    string   `mapstructure:"email"`
+	Phone    string   `mapstructure:"phone"`
+	Password string   `mapstructure:"password"`
+	Roles    []string `mapstructure:"roles"`
+	OrgId    string   `mapstructure:"org_id"`
 }
 
 // MigrationDetails holds table configurations
 type MigrationDetails struct {
-	Organizations []OrganizationDetails `mapstructure:"org"`
+	Users []UserDetails `mapstructure:"org"`
 }
 
 var migrationOnce = sync.Once{}

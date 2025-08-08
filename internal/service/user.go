@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"os"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/triapex/auth/internal/infra"
@@ -21,12 +22,14 @@ import (
 // UserService interface
 type UserService interface {
 	SignUpUser(ctx context.Context, user *model.SignupPayload) (*model.Token, error)
+	SignUpAndRegisterUser(ctx context.Context, user *model.SignupPayload) (*model.Token, error)
 	SSOLogin(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	Login(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	TokenRefresh(ctx context.Context, user *model.TokenRequestBody) (*model.Token, error)
 	GetUserByEmailORPhone(ctx context.Context, phone string, email string) (*model.UserInfo, error)
 	GetUserByID(ctx context.Context, id string) (*model.UserInfo, error)
 	EnrollUser(ctx context.Context, userInfo *model.UserInfo) error
+	RegisterUser(ctx context.Context, userInfo *model.UserInfo) error
 	RevokeUser(ctx context.Context, userInfo *model.UserInfo, reason string) error
 }
 
@@ -78,53 +81,76 @@ func (u *User) SignUpUser(ctx context.Context, userReq *model.SignupPayload) (*m
 	// user must be created in this block
 	// 1.if user already exists in DB, then generate tokens
 	// 2. otherwise, create user and generate tokens
-	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, userReq.UserInfo.Phone, userReq.UserInfo.Email)
+	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, userReq.Phone, userReq.Email)
 	if err != nil && !errors.Is(err, infra.ErrNotFound) {
 		return nil, err
 	}
-	if user != nil && user.Verified {
+	if user != nil {
 		return nil, errors.New("user already exists")
 	}
-	if user == nil {
-		userReq.UserInfo.Password, err = u.GeneratePasswordHash(userReq.UserInfo.Password)
-		if err != nil {
-			return nil, err
-		}
-
-		if user, err = u.userRepo.CreateUser(ctx, userReq.UserInfo); err != nil {
-			return nil, err
-		}
-
-	}
-
-	userProfile := &model.Profile{
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
-		Phone:     user.Phone,
-		Email:     user.Email,
-		Address:   "",
-		Type:      user.Type,
-	}
-	err = u.userRepo.CreateProfile(ctx, userProfile)
+	userReq.Password, err = u.GeneratePasswordHash(userReq.Password)
 	if err != nil {
 		return nil, err
 	}
 
-	user, err = u.userRepo.GetUserByPhoneOREmail(ctx, userReq.UserInfo.Phone, userReq.UserInfo.Email)
-	if err != nil {
+	if user, err = u.userRepo.CreateUser(ctx, &model.UserInfo{
+		Username: userReq.Username,
+		Phone:    userReq.Phone,
+		Email:    userReq.Email,
+		Password: userReq.Password,
+		OrgId:    userReq.OrgId,
+		Roles:    userReq.Roles,
+	}); err != nil {
 		return nil, err
-	}
-	if user == nil {
-		return nil, errors.New("user not found using email/phone")
 	}
 
 	return u.GenerateToken(&model.TokenPayload{
-		Id:       user.ID,
-		Email:    user.Email,
-		Roles:    user.Roles,
-		Phone:    user.Phone,
-		Type:     user.Type,
-		Verified: user.Verified,
+		Id:    strconv.Itoa(int(user.ID)),
+		Email: user.Email,
+		Roles: user.Roles,
+		Phone: user.Phone,
+	})
+}
+func (u *User) SignUpAndRegisterUser(ctx context.Context, userReq *model.SignupPayload) (*model.Token, error) {
+	tid := utils.GetTracingID(ctx)
+	u.log.Println("SignUpUser", tid, "Request for signup from service")
+
+	// user must be created in this block
+	// 1.if user already exists in DB, then generate tokens
+	// 2. otherwise, create user and generate tokens
+	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, userReq.Phone, userReq.Email)
+	if err != nil && !errors.Is(err, infra.ErrNotFound) {
+		return nil, err
+	}
+	if user != nil {
+		return nil, errors.New("user already exists")
+	}
+	userReq.Password, err = u.GeneratePasswordHash(userReq.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	if user, err = u.userRepo.CreateUser(ctx, &model.UserInfo{
+		Username: userReq.Username,
+		Phone:    userReq.Phone,
+		Email:    userReq.Email,
+		Password: userReq.Password,
+		OrgId:    userReq.OrgId,
+		Roles:    userReq.Roles,
+	}); err != nil {
+		return nil, err
+	}
+
+	err = u.RegisterUser(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return u.GenerateToken(&model.TokenPayload{
+		Id:    strconv.Itoa(int(user.ID)),
+		Email: user.Email,
+		Roles: user.Roles,
+		Phone: user.Phone,
 	})
 }
 
@@ -164,17 +190,11 @@ func (u *User) SSOLogin(ctx context.Context, loginReq *model.LoginRequest) (*mod
 		return nil, errors.New("user not found using email/phone")
 	}
 
-	if !user.Verified {
-		return nil, errors.New("user not verified yet")
-	}
-
 	return u.GenerateToken(&model.TokenPayload{
-		Id:       user.ID,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Roles:    user.Roles,
-		Type:     user.Type,
-		Verified: user.Verified,
+		Id:    strconv.Itoa(int(user.ID)),
+		Email: user.Email,
+		Phone: user.Phone,
+		Roles: user.Roles,
 	})
 
 	//return nil, nil
@@ -184,7 +204,7 @@ func (u *User) Login(ctx context.Context, loginReq *model.LoginRequest) (*model.
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("Login", tid, "Request for login from service")
 
-	// find user via email or password
+	// find a user via email or password
 	// 1.if found, check password and generate tokens
 	// 2. other-wise return error
 	user, err := u.userRepo.GetUserByPhoneOREmail(ctx, loginReq.Identifier, loginReq.Identifier)
@@ -195,21 +215,15 @@ func (u *User) Login(ctx context.Context, loginReq *model.LoginRequest) (*model.
 		return nil, errors.New("user not found using email/phone")
 	}
 
-	if !user.Verified {
-		return nil, errors.New("user not verified yet")
-	}
-
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password)); err != nil {
 		return nil, errors.New(fmt.Sprintf("password is not matched: %v", err))
 	}
 
 	return u.GenerateToken(&model.TokenPayload{
-		Id:       user.ID,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Type:     user.Type,
-		Roles:    user.Roles,
-		Verified: user.Verified,
+		Id:    strconv.Itoa(int(user.ID)),
+		Email: user.Email,
+		Phone: user.Phone,
+		Roles: user.Roles,
 	})
 }
 
@@ -225,12 +239,10 @@ func (u *User) TokenRefresh(ctx context.Context, tokenRefreshReq *model.TokenReq
 	}
 
 	return u.GenerateToken(&model.TokenPayload{
-		Id:       user.ID,
-		Email:    user.Email,
-		Phone:    user.Phone,
-		Type:     user.Type,
-		Roles:    user.Roles,
-		Verified: user.Verified,
+		Id:    strconv.Itoa(int(user.ID)),
+		Email: user.Email,
+		Phone: user.Phone,
+		Roles: user.Roles,
 	})
 }
 
@@ -277,7 +289,10 @@ func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) error {
 	)
 
 	if output, err := cmd.CombinedOutput(); err != nil {
-		os.RemoveAll(tempDir)
+		removeErr := os.RemoveAll(tempDir)
+		if removeErr != nil {
+			return fmt.Errorf("failed to remove temp dir: %v\nOutput: %s", removeErr, string(output))
+		}
 		return fmt.Errorf("enrollment failed: %v\nOutput: %s", err, string(output))
 	}
 
@@ -285,6 +300,29 @@ func (u *User) EnrollUser(ctx context.Context, userInfo *model.UserInfo) error {
 		return errors.New("failed to store user msp")
 	}
 
+	return nil
+}
+func (u *User) RegisterUser(ctx context.Context, userInfo *model.UserInfo) error {
+	tid := utils.GetTracingID(ctx)
+	u.log.Println("EnrollUser", tid, "Request for Enroll User from service")
+
+	caAddress := fmt.Sprintf("%s-%s-ca-ca.%s", u.enrollerCfg.Namespace, u.enrollerCfg.Org, u.enrollerCfg.IngressDomain)
+
+	cmd := exec.Command("fabric-ca-client", "register",
+		"--id.name", userInfo.Username,
+		"--id.secret", userInfo.Password,
+		"--id.type", "client",
+		"--id.affiliation", u.enrollerCfg.Org,
+		"--id.attrs", fmt.Sprintf("identity.id=%s:ecert", userInfo.ID),
+		"--url", fmt.Sprintf("https://%s", caAddress),
+		"--tls.certfiles", u.enrollerCfg.TLSCertPath,
+		"--mspdir", u.enrollerCfg.RCAMSPPath,
+	)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("registration failed: %v\nOutput: %s", err, string(output))
+	}
 	return nil
 }
 

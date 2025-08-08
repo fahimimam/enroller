@@ -43,13 +43,12 @@ func (uc *UsersController) SetLogger(lgr logger.StructLogger) {
 }
 
 type signUpPld struct {
-	Email     string         `json:"email"`
-	FirstName string         `json:"first_name"`
-	LastName  string         `json:"last_name"`
-	Password  string         `json:"password"`
-	Phone     string         `json:"phone"`
-	Type      utils.UserType `json:"type"`
-	Roles     []string       `json:"roles"`
+	Username string   `json:"username"`
+	Email    string   `json:"email"`
+	Password string   `json:"password"`
+	Phone    string   `json:"phone"`
+	OrgId    string   `json:"orgId"`
+	Roles    []string `json:"roles"`
 }
 
 // SignUpUser ...
@@ -80,14 +79,8 @@ func (uc *UsersController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(strings.TrimSpace(body.FirstName)) < 2 {
-		_ = response.ServeJSON(w, http.StatusBadRequest, "FirstName minimum length should be 4", nil)
-		return
-	}
-
-	if len(strings.TrimSpace(body.LastName)) < 2 {
-		_ = response.ServeJSON(w, http.StatusBadRequest, "Lastname minimum length should be 4", nil)
-		return
+	if utils.IsInValidEmail(body.Email) {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "Please give valid email id", nil)
 	}
 
 	if !utils.IsValidPhoneNumber(body.Phone) {
@@ -96,16 +89,94 @@ func (uc *UsersController) SignUpUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tokensResponse, err := uc.svc.SignUpUser(ctx, &model.SignupPayload{
-		UserInfo: &model.UserInfo{
-			FirstName: body.FirstName,
-			LastName:  body.LastName,
-			Phone:     body.Phone,
-			Email:     body.Email,
-			Password:  body.Password,
-			Type:      body.Type,
-			Roles:     body.Roles,
-			Verified:  true,
-		},
+		Username: body.Username,
+		Phone:    body.Phone,
+		Email:    body.Email,
+		Password: body.Password,
+		OrgId:    body.OrgId,
+		Roles:    body.Roles,
+	})
+	if err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, tokensResponse)
+	if err == nil {
+		uc.lgr.Println("SignUpUser", tid, "complete!")
+	}
+}
+func (uc *UsersController) RegisterUser(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	tid := utils.GetTracingID(ctx)
+	uc.lgr.Println("SignUpUser", tid, "initialize")
+	userID := r.Header.Get(utils.UserIDHeader)
+
+	if userID == "" {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User id is empty", nil)
+		return
+	}
+
+	user, _ := uc.svc.GetUserByID(ctx, userID)
+	if user == nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User not found", nil)
+		return
+	}
+
+	err := uc.svc.RegisterUser(ctx, user)
+	if err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, "User Registered Successfully")
+	if err == nil {
+		uc.lgr.Println("Register", tid, "complete!")
+	}
+}
+func (uc *UsersController) SignUpAndRegisterUser(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	tid := utils.GetTracingID(ctx)
+	uc.lgr.Println("SignUpUser", tid, "initialize")
+
+	// decode request body to UserInfo
+	body := &signUpPld{}
+	if err := json.NewDecoder(r.Body).Decode(body); err != nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+		return
+	}
+
+	if body.Roles == nil {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User roles required", nil)
+		return
+	}
+
+	if ok := utils.IsRolesValid(body.Roles); !ok {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "User roles are invalid", nil)
+		return
+	}
+
+	if len(strings.TrimSpace(body.Password)) < 8 {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "Password minimum length should be 8", nil)
+		return
+	}
+
+	if utils.IsInValidEmail(body.Email) {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "Please give valid email id", nil)
+	}
+
+	if !utils.IsValidPhoneNumber(body.Phone) {
+		_ = response.ServeJSON(w, http.StatusBadRequest, "Please give valid phone number", nil)
+		return
+	}
+
+	tokensResponse, err := uc.svc.SignUpAndRegisterUser(ctx, &model.SignupPayload{
+		Username: body.Username,
+		Phone:    body.Phone,
+		Email:    body.Email,
+		Password: body.Password,
+		OrgId:    body.OrgId,
+		Roles:    body.Roles,
 	})
 	if err != nil {
 		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
@@ -208,30 +279,6 @@ func (uc *UsersController) TokenRefresh(w http.ResponseWriter, r *http.Request) 
 	err = response.ServeJSON(w, http.StatusOK, "Token refresh successfully", tokensResponseBody)
 	if err == nil {
 		uc.lgr.Println("TokenRefresh", tid, "complete!")
-	}
-}
-
-func (uc *UsersController) ChangePassword(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-	tid := utils.GetTracingID(ctx)
-	uc.lgr.Println("ChangePassword", tid, "Initialize")
-	resetPasswordRequest := &model.PasswordResetReq{}
-	if err := json.NewDecoder(r.Body).Decode(resetPasswordRequest); err != nil {
-		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-	if resetPasswordRequest.NewPassword != resetPasswordRequest.RetypePassword {
-		_ = response.ServeJSON(w, http.StatusBadRequest, "Password does no match", resetPasswordRequest)
-		return
-	}
-	err := uc.svc.ResetPassword(r.Context(), resetPasswordRequest.NewPassword, resetPasswordRequest.ID)
-	if err != nil {
-		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
-		return
-	}
-	err = response.ServeJSON(w, http.StatusOK, "Password Updated successfully", nil)
-	if err == nil {
-		uc.lgr.Println("ChangePassword", tid, "complete!")
 	}
 }
 

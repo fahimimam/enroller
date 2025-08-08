@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/go-chi/chi/v5"
+	"github.com/spf13/viper"
 	"github.com/triapex/auth/api/middleware"
 	"log"
 	"net/http"
@@ -11,8 +12,12 @@ func usersRouter(ctrl *UsersController) http.Handler {
 	h := chi.NewRouter()
 
 	h.Group(func(r chi.Router) {
+		allowedRolesForAuth := viper.GetStringSlice("auth.allowed_roles")
 		r.Use(middleware.AuthMiddleware(ctrl.RSAPublicKey))
-		r.Use(middleware.RoleAuthorizationMiddleware([]string{"admin", "user"}))
+		r.Use(middleware.RoleAuthorizationMiddleware(allowedRolesForAuth))
+		r.Post("/register", ctrl.SignUpUser)
+		r.Post("/signup-register", ctrl.SignUpUser)
+		r.Post("/register", ctrl.RegisterUser)
 		r.Post("/enroll", ctrl.Enroll)
 		r.Delete("/revoke", ctrl.Revoke)
 	})
@@ -21,7 +26,6 @@ func usersRouter(ctrl *UsersController) http.Handler {
 		r.Get("/sso/login", ctrl.ssoLogin)
 		r.Get("/sso/callback", ctrl.callback)
 		r.Post("/login", ctrl.Login)
-		r.Post("/sign-up", ctrl.SignUpUser)
 	})
 
 	return h
