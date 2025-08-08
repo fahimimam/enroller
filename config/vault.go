@@ -36,7 +36,7 @@ func loadVault(fileName string) error {
 // GetVault returns postgres config
 func GetVault(fileName string) *Vault {
 	vaultOnce.Do(func() {
-		err := loadEnroller(fileName)
+		err := loadVault(fileName)
 		if err != nil {
 			log.Fatalf("unable to read config file: %v", err)
 		}

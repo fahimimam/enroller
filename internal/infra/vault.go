@@ -212,4 +212,8 @@ func (v *VaultStore) LogicalDelete(username string) error {
 	_, err = v.client.Logical().Write(destroyPath, map[string]interface{}{
 		"versions": []int{1},
 	})
+	if err != nil {
+		return fmt.Errorf("vault deletion failed: %v", err)
+	}
+	return nil
 }

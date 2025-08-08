@@ -13,7 +13,6 @@ import (
 
 type SystemController struct {
 	db infra.DB
-	kv infra.KV
 }
 
 func NewSystemController(db infra.DB) *SystemController {
@@ -40,8 +39,5 @@ func (s *SystemController) connCheck() error {
 		return fmt.Errorf("postgres conn error: %v", err)
 	}
 	log.Println("kv ping")
-	if err := s.kv.Ping(); err != nil {
-		return fmt.Errorf("redis conn error: %v", err)
-	}
 	return nil
 }
