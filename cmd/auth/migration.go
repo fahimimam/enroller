@@ -7,8 +7,6 @@ import (
 	"github.com/triapex/auth/config"
 	"github.com/triapex/auth/internal/infra"
 	"github.com/triapex/auth/internal/infra/postgres"
-	"github.com/triapex/auth/internal/infra/redis"
-	"github.com/triapex/auth/internal/infra/vault"
 	"github.com/triapex/auth/internal/repo"
 	"github.com/triapex/auth/internal/service"
 	"github.com/triapex/auth/logger"
