@@ -12,6 +12,7 @@ type Enroller struct {
 	IngressDomain string
 	Namespace     string
 	RCAMSPPath    string
+	Mocking       bool
 }
 
 var enrollerOnce = sync.Once{}
@@ -32,6 +33,7 @@ func loadEnroller(fileName string) error {
 		IngressDomain: viper.GetString("enroller.IngressDomain"),
 		Namespace:     viper.GetString("enroller.Namespace"),
 		RCAMSPPath:    viper.GetString("enroller.RCAMSPPath"),
+		Mocking:       viper.GetBool("enroller.Mocking"),
 	}
 
 	return nil

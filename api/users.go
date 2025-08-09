@@ -132,13 +132,16 @@ func (uc *UsersController) RegisterUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	err := uc.userSvc.RegisterUser(ctx, user)
-	if err != nil {
-		_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
-		return
+	if !uc.EnrollerCfg.Mocking {
+		err := uc.userSvc.RegisterUser(ctx, user)
+		if err != nil {
+			_ = response.ServeJSON(w, http.StatusBadRequest, err.Error(), nil)
+			return
+		}
+
 	}
 
-	err = response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, "User Registered Successfully")
+	err := response.ServeJSON(w, http.StatusOK, utils.SuccessMessage, "User Registered Successfully")
 	if err == nil {
 		uc.lgr.Println("Register", tid, "complete!")
 	}
