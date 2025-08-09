@@ -20,7 +20,6 @@ func NewUserRouter(usersCtrl *UsersController) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger(lgr))
-	router.Use(middleware.Headers)
 	router.Use(middleware.Cors())
 	router.Use(chimiddleware.Timeout(30 * time.Second))
 
@@ -42,7 +41,6 @@ func NewSystemRouter(sysCtrl *SystemController) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger(lgr))
-	router.Use(middleware.Headers)
 	router.Use(middleware.Cors())
 	router.Use(chimiddleware.Timeout(30 * time.Second))
 	router.Route("/", func(r chi.Router) {
