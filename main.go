@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/triapex/auth/cmd/auth"
+	"github.com/triapex/auth/cmd/enroller"
 	"time"
 )
 

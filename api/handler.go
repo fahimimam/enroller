@@ -12,7 +12,7 @@ func usersRouter(ctrl *UsersController) http.Handler {
 	h := chi.NewRouter()
 
 	h.Group(func(r chi.Router) {
-		allowedRolesForAuth := viper.GetStringSlice("auth.allowed_roles")
+		allowedRolesForAuth := viper.GetStringSlice("enroller.allowed_roles")
 		r.Use(middleware.AuthMiddleware(ctrl.RSAPublicKey))
 		r.Use(middleware.RoleAuthorizationMiddleware(allowedRolesForAuth))
 		r.Post("/signup", ctrl.SignUpUser)

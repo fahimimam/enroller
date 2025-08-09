@@ -29,7 +29,7 @@ const DefaultRefreshTokenDuration = 30
 // srvCmd is the serve sub command to start the api server
 var srvCmd = &cobra.Command{
 	Use:     "serve",
-	Short:   "serve serves the auth server",
+	Short:   "serve serves the enroller server",
 	Aliases: []string{"s"},
 	RunE:    serve,
 }
@@ -149,9 +149,9 @@ func startApiServer(cfg *config.Application, userSvc service.UserService, vaultS
 	usersCtrl.SetLogger(lgr)
 
 	r := chi.NewMux()
-	r.Route("/auth/api/v1", func(rt chi.Router) {
+	r.Route("/enroller/api/v1", func(rt chi.Router) {
 
-		rt.Mount("/auth", api.NewUserRouter(usersCtrl))
+		rt.Mount("/enroller", api.NewUserRouter(usersCtrl))
 	})
 
 	srvr := http.Server{
