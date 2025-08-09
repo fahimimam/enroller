@@ -16,17 +16,15 @@ type UserRepo interface {
 
 // User brand repo
 type User struct {
-	table       *config.Table
-	db          infra.DB
-	vaultConfig *config.Vault
+	table *config.Table
+	db    infra.DB
 }
 
 // NewUser returns new brand repo
-func NewUser(table *config.Table, vaultConfig *config.Vault, db infra.DB) UserRepo {
+func NewUser(table *config.Table, db infra.DB) UserRepo {
 	return &User{
-		table:       table,
-		vaultConfig: vaultConfig,
-		db:          db,
+		table: table,
+		db:    db,
 	}
 }
 

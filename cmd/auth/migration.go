@@ -28,7 +28,6 @@ var migrationRoot = &cobra.Command{
 		cfgDBTable := config.GetTable(cfgPath)
 		cfgToken := config.GetToken(cfgPath)
 		cfgOAuth := config.GetOAuth(cfgPath)
-		cfgVault := config.GetVault(cfgPath)
 		cfgEnroller := config.GetEnroller(cfgPath)
 		migrationConfig = config.GetMigration(cfgPath)
 		ctx := context.Background()
@@ -43,7 +42,7 @@ var migrationRoot = &cobra.Command{
 		//defer db.Close(ctx)
 		// connect redis db
 
-		userRepo := repo.NewUser(cfgDBTable, cfgVault, db)
+		userRepo := repo.NewUser(cfgDBTable, db)
 		privateKey, err := config.GetPrivateKey(cfgToken.PrivateKeyPath)
 		if err != nil {
 			return err

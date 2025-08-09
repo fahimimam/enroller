@@ -26,7 +26,6 @@ type UserService interface {
 	SSOLogin(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	Login(ctx context.Context, loginReq *model.LoginRequest) (*model.Token, error)
 	TokenRefresh(ctx context.Context, user *model.TokenRequestBody) (*model.Token, error)
-	GetUserByEmailORPhone(ctx context.Context, phone string, email string) (*model.UserInfo, error)
 	GetUserByID(ctx context.Context, id string) (*model.UserInfo, error)
 	EnrollUser(ctx context.Context, userInfo *model.UserInfo) (string, error)
 	RegisterUser(ctx context.Context, userInfo *model.UserInfo) error
@@ -254,11 +253,6 @@ func (u *User) TokenRefresh(ctx context.Context, tokenRefreshReq *model.TokenReq
 	})
 }
 
-func (u *User) GetUserByEmailORPhone(ctx context.Context, phone string, email string) (*model.UserInfo, error) {
-	tid := utils.GetTracingID(ctx)
-	u.log.Println("GetUserByPhoneOREmail", tid, "Request for Get User By Identifier OR Phone from service")
-	return u.userRepo.GetUserByPhoneOREmail(ctx, phone, email)
-}
 func (u *User) GetUserByID(ctx context.Context, id string) (*model.UserInfo, error) {
 	tid := utils.GetTracingID(ctx)
 	u.log.Println("GetUserByPhoneOREmail", tid, "Request for Get User By Identifier OR Phone from service")

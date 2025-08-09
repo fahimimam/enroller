@@ -61,7 +61,7 @@ func serve(cmd *cobra.Command, args []string) error {
 
 	vaultRepo := repo.NewVault(cfgVault, vaultInfra)
 	// Initialize Repositories.
-	userRepo := repo.NewUser(cfgDBTable, cfgVault, db)
+	userRepo := repo.NewUser(cfgDBTable, db)
 
 	// Generate Public and private keys for User services.
 	privateKey, err := config.GetPrivateKey(cfgToken.PrivateKeyPath)

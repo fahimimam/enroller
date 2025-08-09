@@ -2,7 +2,6 @@ package utils
 
 import (
 	emailverifier "github.com/AfterShip/email-verifier"
-	"math/rand"
 	"regexp"
 )
 
@@ -11,10 +10,6 @@ func IsValueEmpty(val string) bool {
 		return true
 	}
 	return false
-}
-
-func GenerateCode(low, hi int) int {
-	return low + rand.Intn(hi-low)
 }
 
 func IsInValidEmail(email string) bool {

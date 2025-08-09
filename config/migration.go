@@ -18,7 +18,7 @@ type UserDetails struct {
 
 // MigrationDetails holds table configurations
 type MigrationDetails struct {
-	Users []UserDetails `mapstructure:"org"`
+	Users []UserDetails `mapstructure:"users"`
 }
 
 var migrationOnce = sync.Once{}

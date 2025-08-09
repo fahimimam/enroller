@@ -9,10 +9,6 @@ import (
 // Table holds table configurations
 type Table struct {
 	UserTable string `yaml:"user"`
-
-	UserCollectionNameProfile string `yaml:"profile"`
-	VerificationCollection    string `yaml:"verification"`
-	OtpCollection             string `yaml:"otp"`
 }
 
 var tableOnce = sync.Once{}
@@ -28,10 +24,7 @@ func loadTable(fileName string) error {
 	viper.AutomaticEnv()
 
 	tableConfig = &Table{
-		UserTable:                 viper.GetString("table.user"),
-		UserCollectionNameProfile: viper.GetString("table.profile"),
-		VerificationCollection:    viper.GetString("table.verification"),
-		OtpCollection:             viper.GetString("table.otp"),
+		UserTable: viper.GetString("table.user"),
 	}
 
 	log.Println("table config ", tableConfig)
